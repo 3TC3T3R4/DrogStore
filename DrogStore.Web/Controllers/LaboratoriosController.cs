@@ -22,7 +22,9 @@ namespace DrogStore.Web.Controllers
         // GET: Laboratorios
         public async Task<IActionResult> Index()
         {
-              return View(await _context.Laboratorios.ToListAsync());
+              return View(await _context.Laboratorios.
+                  Include(c => c.Medicamentos).
+                  ToListAsync());
         }
 
         // GET: Laboratorios/Details/5
@@ -34,7 +36,11 @@ namespace DrogStore.Web.Controllers
             }
 
             var laboratorio = await _context.Laboratorios
+                .Include(c => c.Medicamentos)
+                .ThenInclude(d => d.Proovedores)
+
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (laboratorio == null)
             {
                 return NotFound();
@@ -170,9 +176,75 @@ namespace DrogStore.Web.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        private bool LaboratorioExists(int id)
+        public async Task<IActionResult> AddMedicamentos(int? id)
         {
-          return _context.Laboratorios.Any(e => e.Id == id);
+            if (id == null)
+            {
+                return NotFound();
+            }
+            Laboratorio laboratorio = await _context.Laboratorios.FindAsync(id);
+            if (laboratorio == null)
+            {
+                return NotFound();
+            }
+            Medicamento model = new Medicamento { IdLaboratorio = laboratorio.Id };
+            return View(model);
         }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddMedicamento(Medicamento medicamento)
+        {
+            
+        if (ModelState.IsValid)
+            {
+                Laboratorio laboratorio = await _context.Laboratorios
+                .Include(c => c.Medicamentos)
+                .FirstOrDefaultAsync(c => c.Id == medicamento.IdLaboratorio);
+                if (laboratorio == null)
+                {
+                    return NotFound();
+                }
+                try
+                {
+                    medicamento.Id = 0;
+                    laboratorio.Medicamentos.Add(medicamento);
+                    _context.Update(laboratorio);
+                    await _context.SaveChangesAsync();
+
+                    return RedirectToAction(nameof(Details), new
+                    {
+                        Id = laboratorio.Id
+                    });
+                }
+                catch (DbUpdateException dbUpdateException)
+                {
+                    if
+                   (dbUpdateException.InnerException.Message.Contains("duplicate"))
+                    {
+                        ModelState.AddModelError(string.Empty, "There are a record with the same name.");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError(string.Empty,
+                       dbUpdateException.InnerException.Message);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    ModelState.AddModelError(string.Empty, exception.Message);
+                }
+            }
+            return View(medicamento);
+        }
+
+
+
+
+
+        //private bool LaboratorioExists(int id)
+        //{
+        //  return _context.Laboratorios.Any(e => e.Id == id);
+        //}
     }
 }
